@@ -9,7 +9,7 @@ This "tool" is just a single html file. The UI is built using [LitElement](https
 ## How to use the tool ##
 
 - First you'll need to create a free Clearbit account and get an API key
-- Then download the `index.html` file from this repo to your computer and open it in a web browser
+- Then either open the [Github-hosted copy of the tool](https://hankish.github.io/clearbit-console/index.html) or download the `index.html` file from this repo to your computer and open it in a web browser
 - Enter in your API key and paste a list of company names, one per line
 - Click the "Run Query" button and wait for it to finish
 - There will be a table of results with three columns
