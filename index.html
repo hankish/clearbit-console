@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <title>Clearbit Console</title>
+
+    <link
+      href="https://fonts.googleapis.com/css?family=Public+Sans:100,100i,200,200i,300,300i,400,
+        400i,500,500i,600,600i,700,700i,800,800i,900,900i&display=swap"
+      rel="stylesheet"
+    >
+
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+
+        font-family: 'Public Sans', sans-serif;
+        font-size: 16px;
+        color: #161616;
+      }
+    </style>
+  </head>
+
+  <body>
+
+    <clearbit-console></clearbit-console>
+
+    <script type="module">
+
+      import { LitElement, html, css } from 'https://unpkg.com/lit-element?module';
+      import 'https://unpkg.com/@material/mwc-top-app-bar-fixed?module';
+      import 'https://unpkg.com/@material/mwc-button?module';
+      import 'https://unpkg.com/@material/mwc-textfield?module';
+      import 'https://unpkg.com/@material/mwc-textarea?module';
+      import 'https://unpkg.com/@material/mwc-snackbar?module';
+      import 'https://unpkg.com/@material/mwc-linear-progress?module';
+
+      // #=== SETTINGS ===#
+
+      const CB_COMPANY_NAME_API = 'https://company.clearbit.com/v1/domains/find?name=';
+
+      // #=== MAIN APP ===#
+
+      class ClearbitConsole extends LitElement {
+
+        // #=== PROPERTIES ===#
+
+        static get properties() {
+          return {
+            inputItems: { type: Array },
+            outputItems: { type: Array },
+            running: { type: Boolean },
+            progress: { type: Number },
+          }
+        }
+
+        // #=== LIFECYCLE ===#
+
+        constructor() {
+          super();
+
+          this.inputItems = [];
+          this.outputItems = [];
+          this.running = false;
+          this.progress = 0;
+        }
+
+        // #=== EVENTS & ACTIONS ===#
+
+        async _runQuery() {
+          let apiKey = this.shadowRoot.getElementById('apiKeyText').value;
+          let inputItemText = this.shadowRoot.getElementById('inputItemText').value;
+          
+          if (!apiKey || !inputItemText) {
+            alert('ERROR: You must enter an API Key and at least one company name');
+            return true;
+          }
+
+          this.running = true;
+          this.progress = 0;
+          this.inputItems = inputItemText.split('\n');
+          
+          try {
+            let newOutputItems = [];
+            let headers = new Headers();
+            headers.append('Authorization', 'Bearer ' + apiKey);
+
+            for (let i = 0; i < this.inputItems.length; i++) {
+              let response = await fetch(CB_COMPANY_NAME_API + this.inputItems[i], { headers });
+              let jsonResponse = await response.json();
+
+              // Copy the error message to the name field if present (so it shows up in table)
+              if (jsonResponse.error) {
+                jsonResponse.name = jsonResponse.error.message;
+              }
+
+              newOutputItems.push(jsonResponse);
+              this.progress = newOutputItems.length / this.inputItems.length;
+            }
+
+            this.outputItems = newOutputItems;
+          } catch(e) {
+            alert(`ERROR: ${e}`);
+          }
+
+          this.running = false;
+        }
+
+        _exportItems() {
+          this.writeToCsv(this.outputItems, ['name', 'logo', 'domain']);
+        }
+
+        _copyColumn(e) {
+          this.copyToClipboard(
+            this.outputItems
+              .map(item => item[e.target.dataset.key])
+              .join('\r\n')
+          );
+        }
+
+        // #=== HELPERS ===#
+
+        copyToClipboard(text) {
+          const tempElement = document.createElement('textarea');
+
+          tempElement.value = text;
+          tempElement.setAttribute('readonly', '');
+          tempElement.style.position = 'absolute';
+          tempElement.style.left = '-9999px';
+
+          document.body.appendChild(tempElement);
+          tempElement.select();
+          document.execCommand('copy');
+          document.body.removeChild(tempElement);
+
+          this.shadowRoot.querySelector('#copyToClipboardSnackbar').open();
+        };
+
+        // Objects should be array of objects, keys array of keys for columns 
+        writeToCsv(objects, keys) {
+          let csvContent = 'data:text/csv;charset=utf-8,'
+            + keys.join(',') + '\r\n'
+            + objects.map(object => {
+              return keys.map(key => object[key]).join(',');
+            }).join('\r\n')
+          var encodedUri = encodeURI(csvContent);
+          window.open(encodedUri);
+        }
+
+        // #=== STYLES ===#
+
+        static get styles() {
+          return css`
+            mwc-top-app-bar-fixed {
+              --mdc-theme-primary: #0E70E0;
+              --mdc-theme-on-primary: white;
+            }
+
+            #header {
+              display: flex;
+              background: #F6F2FF;
+            }
+
+            #fields {
+              list-style: none;
+              margin: 0;
+              padding: 0;
+            }
+            #fields > li {
+              padding: 0;
+              margin: 2rem;
+            }
+            #fields > li > mwc-textfield, #fields > li > mwc-textarea {
+              width: 40rem;
+            }
+
+            #actions {
+              margin: 2rem 0 0 0;
+            }
+            mwc-linear-progress {
+              width: 20rem;
+              margin-top: 0.9rem;
+            }
+
+            #outputTable {
+              width: 100%;
+              border-collapse: collapse;
+            }
+            #outputTable th {
+              padding: 1rem 2rem;
+              text-align: left;
+              border-bottom: 1px solid #D4BBFF;
+              background: #E8DAFF;
+            }
+            #outputTable td {
+              padding: 0.5rem 2rem;
+              text-align: left;
+            }
+
+            #tableFooter {
+              display: flex;
+              align-items: center;
+
+              padding: 2rem;
+              text-right: left;
+              border-top: 1px solid #D4BBFF;
+              background: #E8DAFF;
+            }
+            #tableFooter .label {
+              flex: 1 1 auto;
+
+              font-weight: 600;
+              font-size: 1.1rem;
+            }
+          `;
+        }
+
+        // #=== TEMPLATES ===#
+
+        get renderTable() {
+          return html`
+            <div id="tableWrapper">
+              <table id="outputTable">
+                <thead>
+                  <th>
+                    Name
+                    (<a href="#" @click="${this._copyColumn}") data-key="name">Copy Column</a>)
+                  </th>
+                  <th>
+                    Logo
+                    (<a href="#" @click="${this._copyColumn}") data-key="logo">Copy Column</a>)
+                  </th>
+                  <th>
+                    Domain
+                    (<a href="#" @click="${this._copyColumn}") data-key="domain">Copy Column</a>)
+                  </th>
+                </thead>
+                <tbody>
+                  ${this.outputItems.map(item => html`
+                    <tr>
+                      <td>${item.name}</td>
+                      <td>${item.logo}</td>
+                      <td>${item.domain}</td>
+                    </tr>
+                  `)}
+                </tbody>
+              </table>
+              <div id="tableFooter">
+                <div class="label">
+                  Export Current Items
+                </div>
+                ${this.outputItems && this.outputItems.length
+                  ? html`
+                    <mwc-button
+                      label="Export to CSV"
+                      @click="${this._exportItems}"
+                      outlined
+                    ></mwc-button>
+                  `
+                  : html``
+                }
+              </div>
+            </div>
+          `;
+        }
+
+        render() {
+          return html`
+            <!-- SNACKBAR -->
+            <mwc-snackbar
+            id="copyToClipboardSnackbar"
+            labelText="Text copied to clipboard."
+            ></mwc-snackbar>
+            
+            <mwc-top-app-bar-fixed>
+              <div slot="title">Clearbit Company Domain API Console</div>
+
+              <!-- BODY -->
+              <div>
+
+                <!-- HEADER -->
+                <div id="header">
+                  <ul id="fields">
+                    <li>
+                      <mwc-textfield
+                        id="apiKeyText"
+                        label="Clearbit API Key"
+                        outlined
+                      ></mwc-textfield>
+                    </li>
+                    <li>
+                      <mwc-textarea
+                        id="inputItemText"
+                        label="Company Names"
+                        helper="Enter a list of company names, one per line"
+                        rows="10"
+                        outlined
+                      ></mwc-textarea>
+                    </li>
+                  </ul>
+                  
+                  <div id="actions">
+                    <mwc-button
+                      @click="${this._runQuery}"
+                      raised
+                      ?disabled=${this.running}
+                    >
+                      Run Query
+                    </mwc-button>
+                    <mwc-linear-progress
+                      .progress=${this.progress}
+                      ?closed=${!this.running}
+                    ></mwc-linear-progress>
+                  </div>
+                </div>
+
+                <!-- TABLE -->
+                ${this.outputItems && this.outputItems.length
+                  ? this.renderTable
+                  : html``
+                }
+                
+              </div>
+            </mwc-top-app-bar-fixed>
+
+          `;
+        }
+      }
+
+      customElements.define('clearbit-console', ClearbitConsole);
+
+    </script>
+
+  </body>
+
+</html>
